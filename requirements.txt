@@ -8,4 +8,4 @@ pygame
 requests
 Pillow
 opencv-python-headless
-
+streamlit_webrtc
