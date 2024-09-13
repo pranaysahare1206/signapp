@@ -18,7 +18,14 @@ hands = mp_hands.Hands(min_detection_confidence=0.8, min_tracking_confidence=0.8
 translator = Translator()
 
 # Initialize pygame for sound playback
-pygame.mixer.init()
+# pygame.mixer.init()
+try:
+    pygame.mixer.init()
+    audio_available = True
+except pygame.error:
+    print("Audio device not available. Text-to-speech functionality will be disabled.")
+    audio_available = False
+
 
 # Streamlit layout
 st.set_page_config(layout="wide")
@@ -36,16 +43,19 @@ gesture_type = st.sidebar.radio("Select Gesture Type", ["Alphabets", "Numbers", 
 
 # Function to convert text to speech using gTTS and play it using pygame
 def text_to_speech(text, language):
-    lang_code = {'Marathi': 'mr', 'Hindi': 'hi', 'English': 'en'}
-    tts = gTTS(text=text, lang=lang_code[language])
-    mp3_fp = io.BytesIO()
-    tts.write_to_fp(mp3_fp)
-    mp3_fp.seek(0)
-    pygame.mixer.music.load(mp3_fp, 'mp3')
-    pygame.mixer.music.play()
-    while pygame.mixer.music.get_busy():
-        time.sleep(0.1)
-    pygame.mixer.music.stop()
+    if audio_available:
+        lang_code = {'Marathi': 'mr', 'Hindi': 'hi', 'English': 'en'}
+        tts = gTTS(text=text, lang=lang_code[language])
+        mp3_fp = io.BytesIO()
+        tts.write_to_fp(mp3_fp)
+        mp3_fp.seek(0)
+        pygame.mixer.music.load(mp3_fp, 'mp3')
+        pygame.mixer.music.play()
+        while pygame.mixer.music.get_busy():
+            time.sleep(0.1)
+        pygame.mixer.music.stop()
+    else:
+        st.warning("Text-to-speech is not available due to lack of audio support.")
 
 
 # Two columns in Streamlit
