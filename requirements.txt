@@ -8,10 +8,4 @@ pygame
 requests
 Pillow
 opencv-python-headless
-streamlit
-opencv-python
-mediapipe
-googletrans==4.0.0-rc1  # Latest stable version
-gtts
-pygame
-numpy
+
