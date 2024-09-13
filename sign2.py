@@ -1,31 +1,16 @@
-import cv2
-import mediapipe as mp
-import numpy as np
 import streamlit as st
+import mediapipe as mp
+import cv2
+import numpy as np
 from googletrans import Translator
-from gtts import gTTS
-import io
-import pygame
 import time
 
 # Initialize MediaPipe solutions
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 
-hands = mp_hands.Hands(min_detection_confidence=0.8, min_tracking_confidence=0.8)
-
 # Initialize Translator
 translator = Translator()
-
-# Initialize pygame for sound playback
-# pygame.mixer.init()
-try:
-    pygame.mixer.init()
-    audio_available = True
-except pygame.error:
-    print("Audio device not available. Text-to-speech functionality will be disabled.")
-    audio_available = False
-
 
 # Streamlit layout
 st.set_page_config(layout="wide")
@@ -40,24 +25,6 @@ language = st.sidebar.selectbox("Select Language", ["Marathi", "Hindi", "English
 # Gesture type selection
 gesture_type = st.sidebar.radio("Select Gesture Type", ["Alphabets", "Numbers", "Words/Sentences"])
 
-
-# Function to convert text to speech using gTTS and play it using pygame
-def text_to_speech(text, language):
-    if audio_available:
-        lang_code = {'Marathi': 'mr', 'Hindi': 'hi', 'English': 'en'}
-        tts = gTTS(text=text, lang=lang_code[language])
-        mp3_fp = io.BytesIO()
-        tts.write_to_fp(mp3_fp)
-        mp3_fp.seek(0)
-        pygame.mixer.music.load(mp3_fp, 'mp3')
-        pygame.mixer.music.play()
-        while pygame.mixer.music.get_busy():
-            time.sleep(0.1)
-        pygame.mixer.music.stop()
-    else:
-        st.warning("Text-to-speech is not available due to lack of audio support.")
-
-
 # Two columns in Streamlit
 col1, col2 = st.columns([3, 1])
 
@@ -66,7 +33,7 @@ with col1:
     FRAME_WINDOW = st.image([])
 
 with col2:
-    st.header("Translation & Speech")
+    st.header("Translation")
     output_text = st.empty()
 
 # Dictionary for sign language gestures and their translations
@@ -102,7 +69,6 @@ signs = {
     "My Name Is": "My Name Is",
     "Where Is The Bathroom": "Where Is The Bathroom"
 }
-
 
 def detect_hand_gestures(landmarks):
     # Helper function to check if a finger is extended
@@ -333,69 +299,68 @@ def detect_hand_gestures(landmarks):
     return None
 
 
-def process_frame(image):
+
+def process_frame(image, hands):
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-    # Process hands
-    hand_results = hands.process(image_rgb)
-
+    results = hands.process(image_rgb)
+    
     gesture = None
-
-    # Process hand landmarks and detect gestures
-    if hand_results.multi_hand_landmarks:
-        for hand_landmarks in hand_results.multi_hand_landmarks:
+    
+    if results.multi_hand_landmarks:
+        for hand_landmarks in results.multi_hand_landmarks:
             mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
             gesture = detect_hand_gestures(hand_landmarks.landmark)
             if gesture:
-                break  # Stop after detecting the first gesture
-
+                break
+    
     return image, gesture
 
+def main():
+    # Initialize MediaPipe Hands
+    hands = mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+    
+    # Initialize webcam
+    cap = cv2.VideoCapture(0)
+    
+    previous_gesture = None
+    gesture_start_time = None
+    gesture_timeout = 1  # Time in seconds to wait before finalizing a gesture
 
-# Start video capture
-cap = cv2.VideoCapture(0)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            st.error("Failed to capture video. Please check your webcam.")
+            break
 
-# Set a larger frame size
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1080)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 520)
+        # Process frame and detect gesture
+        frame, gesture = process_frame(frame, hands)
 
-# Real-time Video Processing
-previous_gesture = None
-gesture_timeout = 1  # Time in seconds to wait before finalizing a gesture
-gesture_start_time = None
+        # Display the video feed
+        FRAME_WINDOW.image(frame, channels="BGR")
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        st.write("Video Capture Error")
-        break
-
-    # Process frame and detect gesture
-    frame, gesture = process_frame(frame)
-
-    # Display the video feed (larger size)
-    FRAME_WINDOW.image(frame, channels="BGR", use_column_width=True)
-
-    # Handle gesture detection and translation
-    if gesture:
-        current_time = time.time()
-        if gesture == previous_gesture:
-            if gesture_start_time and (current_time - gesture_start_time) >= gesture_timeout:
-                with col2:
+        # Handle gesture detection and translation
+        if gesture:
+            current_time = time.time()
+            if gesture == previous_gesture:
+                if gesture_start_time and (current_time - gesture_start_time) >= gesture_timeout:
                     translation = translator.translate(signs.get(gesture, "Unknown"), dest=language.lower()).text
                     output_text.markdown(
                         f"<h2>Gesture Detected:</h2><h1>{gesture}</h1><h2>Translation in {language}:</h2><h1>{translation}</h1>",
-                        unsafe_allow_html=True)
-                    text_to_speech(translation, language)
-                previous_gesture = None
-                gesture_start_time = None
-        else:
-            previous_gesture = gesture
-            gesture_start_time = current_time
+                        unsafe_allow_html=True
+                    )
+                    previous_gesture = None
+                    gesture_start_time = None
+            else:
+                previous_gesture = gesture
+                gesture_start_time = current_time
 
-    # Introduce a short delay to improve performance and avoid flickering
-    time.sleep(0.1)
+        # Check if the user wants to stop the application
+        if st.button('Stop'):
+            break
 
-# Release the video capture and close all windows
-cap.release()
-cv2.destroyAllWindows()
+    # Release resources
+    cap.release()
+    hands.close()
+
+if __name__ == "__main__":
+    main()
