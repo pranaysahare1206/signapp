@@ -7,3 +7,4 @@ gTTS
 pygame
 requests
 Pillow
+opencv-python-headless
